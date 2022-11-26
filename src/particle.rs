@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Particle {
     pub px: i32,
     pub py: i32,
@@ -15,9 +16,10 @@ impl Particle {
         self.vx += vx;
         self.vy += vy;
     }
+    
 }
 
-fn occupied(x: i32, y: i32, queue: Vec<Particle>) -> bool {
+pub fn occupied(x: i32, y: i32, queue: Vec<Particle>) -> bool {
     for p in queue.iter() {
         if x == p.px && y == p.py {
             return true;
