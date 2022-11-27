@@ -1,6 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+use canvas::Canvas;
 use rand::Rng;
 use std::thread::sleep;
 use std::time;
@@ -14,14 +15,11 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-mod draw;
 mod particle;
+mod canvas;
 
 const WIDTH: u32 = 900;
 const HEIGHT: u32 = 450;
-const SCREEN_HEIGHT: f32 = HEIGHT as f32 * 2.0;
-const ROW_LEN: usize = 900;
-const COL_LEN: usize = 450;
 const TILE_SIZE: usize = 5;
 const FPS: f64 = 40.0;
 const GLOBE_RAD: u32 = 40;
@@ -30,20 +28,12 @@ const GREY: [u8; 4] = [0x3e, 0x42, 0x4b, 0xff];
 const WHITE: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 const GLASS: [u8; 4] = [0xc7, 0xe3, 0xe1, 0xff];
 
-const CENTRE_X: i32 = (ROW_LEN / TILE_SIZE / 2) as i32;
-const CENTRE_Y: i32 = (COL_LEN / TILE_SIZE / 2) as i32;
+const CENTRE_X: i32 = (WIDTH as usize / TILE_SIZE / 2) as i32;
+const CENTRE_Y: i32 = (HEIGHT as usize / TILE_SIZE / 2) as i32;
 
-fn draw_particles(frame: &mut [u8], queue: &Vec<particle::Particle>) {
+fn draw_particles(frame: &mut [u8], canvas: &Canvas, queue: &Vec<particle::Particle>) {
     for p in queue.iter() {
-        draw::draw_tile(
-            frame,
-            ROW_LEN,
-            COL_LEN,
-            p.px as usize,
-            p.py as usize,
-            TILE_SIZE,
-            WHITE,
-        );
+        canvas.draw_tile(frame, p.px as usize, p.py as usize, WHITE);
     }
 }
 
@@ -60,21 +50,6 @@ fn update_particles(queue: &mut Vec<particle::Particle>) {
             (*p).v_update(rand::thread_rng().gen_range(-1..2), 0);
         }
     }
-}
-
-fn screen_to_grid(xcoord: bool, value: f32) -> usize {
-    if xcoord {
-        let gridx = (value / 2.0 / TILE_SIZE as f32) as usize;
-        if gridx <= ROW_LEN / TILE_SIZE {
-            return gridx;
-        }
-        return ROW_LEN / TILE_SIZE;
-    }
-    let gridy = ((SCREEN_HEIGHT as f32 - value) / 2.0 / TILE_SIZE as f32) as usize;
-    if gridy <= COL_LEN / TILE_SIZE {
-        return gridy;
-    }
-    COL_LEN / TILE_SIZE
 }
 
 fn main() -> Result<(), Error> {
@@ -96,7 +71,7 @@ fn main() -> Result<(), Error> {
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
-
+    let canvas = Canvas::init(WIDTH as usize, HEIGHT as usize, TILE_SIZE);
     let mut particle_queue = Vec::new();
     let mut mouse_x: f32 = CENTRE_X as f32;
     let mut mouse_y: f32 = CENTRE_Y as f32;
@@ -104,21 +79,14 @@ fn main() -> Result<(), Error> {
     event_loop.run(move |event, _, control_flow| {
         //Stamp time
         let at_last_frame = time::Instant::now();
+        
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            draw::clear_frame(pixels.get_frame_mut(), GREY);
-            draw::draw_circle(
-                pixels.get_frame_mut(),
-                ROW_LEN,
-                COL_LEN,
-                TILE_SIZE,
-                ROW_LEN / TILE_SIZE / 2,
-                COL_LEN / TILE_SIZE / 2,
-                GLOBE_RAD,
-                GLASS,
-            );
+            canvas.clear(pixels.get_frame_mut(), GREY);
+            canvas.draw_circle(pixels.get_frame_mut(), CENTRE_X as usize, CENTRE_Y as usize, GLOBE_RAD, GLASS);
             update_particles(&mut particle_queue);
-            draw_particles(pixels.get_frame_mut(), &particle_queue);
+            draw_particles(pixels.get_frame_mut(), &canvas, &particle_queue);
+            
             if pixels
                 .render()
                 .map_err(|e| error!("pixels.render() failed: {}", e))
@@ -143,8 +111,8 @@ fn main() -> Result<(), Error> {
                 };
                 //Push a snow
                 particle_queue.push(particle::Particle {
-                    px: screen_to_grid(true, mouse_x) as i32,
-                    py: screen_to_grid(false, mouse_y) as i32,
+                    px: canvas.mouse_to_canvas(true, mouse_x) as i32,
+                    py: canvas.mouse_to_canvas(false, mouse_y) as i32,
                     vx: rand::thread_rng().gen_range(-2..3),
                     vy: -1,
                 });
