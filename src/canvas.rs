@@ -101,3 +101,49 @@ impl Canvas {
     }
 
 }
+
+fn trans_point(x: i32, y: i32, cx: i32, cy: i32) -> (i32, i32) {
+    (x + cx, y + cy)
+}
+
+pub fn circle_coords(cx: i32, cy: i32, r: i32) -> Vec<(i32, i32)> {
+    let mut xi: i32 = r;
+    let mut yi: i32 = 0;
+    let mut points = Vec::new();
+    while xi >= yi {
+        let mut x = xi;
+        let mut y = yi;
+        //first octant
+        points.push(trans_point(x, y, cx, cy));
+        //second octant, reflect first in x=y
+        (x, y) = (y, x);
+        points.push(trans_point(x, y, cx, cy));
+        //third octant, reflect second in x
+        (x, y) = (-x, y);
+        points.push(trans_point(x, y, cx, cy));
+        //fourth octant, reflect third in x=-y;
+        (x, y) = (-y, -x);
+        points.push(trans_point(x, y, cx, cy));
+        //fith octant, reflect fourth in y
+        (x, y) = (x, -y);
+        points.push(trans_point(x, y, cx, cy));
+        //sixth octant, reflect fith in x=y
+        (x, y) = (y, x);
+        points.push(trans_point(x, y, cx, cy));
+        //seventh octant, reflect sixth in x
+        (x, y) = (-x, y);
+        points.push(trans_point(x, y, cx, cy));
+        //eith octant, reflect seventh in x=-y
+        (x, y) = (-y, -x);
+        points.push(trans_point(x, y, cx, cy));
+        //update
+        if radius_error(xi - 1, yi + 1, r as i32) < radius_error(xi, yi + 1, r as i32) {
+            xi -= 1;
+            yi += 1;
+        } else {
+            yi += 1;
+        }
+    
+    }
+    points
+}

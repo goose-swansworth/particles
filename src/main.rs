@@ -6,6 +6,7 @@ use rand::Rng;
 use std::thread::sleep;
 use std::time;
 use std::usize;
+use std::collections::HashSet;
 
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -38,18 +39,29 @@ fn draw_particles(frame: &mut [u8], canvas: &Canvas, queue: &Vec<particle::Parti
 }
 
 fn in_globle(x: i32, y: i32) -> bool {
-    (CENTRE_X - x).pow(2) + (CENTRE_Y - y).pow(2) <= GLOBE_RAD.pow(2) as i32
+    (CENTRE_X - x).pow(2) + (CENTRE_Y - y).pow(2) <= GLOBE_RAD.pow(2) as i32 + 1
 }
 
-fn update_particles(queue: &mut Vec<particle::Particle>) {
+fn update_particles(queue: &mut Vec<particle::Particle>, occupied: &mut HashSet<(i32, i32)>) {
     for p in queue.iter_mut() {
-        if in_globle(p.px + p.vx, p.py + p.vy) {
-            (*p).particle_move();
-            (*p).v_update(rand::thread_rng().gen_range(-1..2), 0);
-        } else {
-            (*p).v_update(rand::thread_rng().gen_range(-1..2), 0);
-        }
+        p.update(occupied);
     }
+}
+
+fn add_circle_points(occupied: &mut HashSet<(i32, i32)>) {
+    let points = canvas::circle_coords(CENTRE_X, CENTRE_Y, GLOBE_RAD as i32);
+    for p in points.iter() {
+        occupied.insert(*p);
+    }
+    let points = canvas::circle_coords(CENTRE_X, CENTRE_Y, GLOBE_RAD as i32 + 1);
+    for p in points.iter() {
+        occupied.insert(*p);
+    }
+    let points = canvas::circle_coords(CENTRE_X, CENTRE_Y, GLOBE_RAD as i32 + 2);
+    for p in points.iter() {
+        occupied.insert(*p);
+    }
+    
 }
 
 fn main() -> Result<(), Error> {
@@ -73,6 +85,8 @@ fn main() -> Result<(), Error> {
     };
     let canvas = Canvas::init(WIDTH as usize, HEIGHT as usize, TILE_SIZE);
     let mut particle_queue = Vec::new();
+    let mut occupied: HashSet<(i32, i32)> = HashSet::new();
+    add_circle_points(&mut occupied);
     let mut mouse_x: f32 = CENTRE_X as f32;
     let mut mouse_y: f32 = CENTRE_Y as f32;
 
@@ -84,7 +98,7 @@ fn main() -> Result<(), Error> {
         if let Event::RedrawRequested(_) = event {
             canvas.clear(pixels.get_frame_mut(), GREY);
             canvas.draw_circle(pixels.get_frame_mut(), CENTRE_X as usize, CENTRE_Y as usize, GLOBE_RAD, GLASS);
-            update_particles(&mut particle_queue);
+            update_particles(&mut particle_queue, &mut occupied);
             draw_particles(pixels.get_frame_mut(), &canvas, &particle_queue);
             
             if pixels
@@ -109,13 +123,17 @@ fn main() -> Result<(), Error> {
                     None => (mouse_x, mouse_y),
                     Some((x, y)) => (x, y)
                 };
+                let px = canvas.mouse_to_canvas(true, mouse_x) as i32;
+                let py = canvas.mouse_to_canvas(false, mouse_y) as i32;
                 //Push a snow
                 particle_queue.push(particle::Particle {
-                    px: canvas.mouse_to_canvas(true, mouse_x) as i32,
-                    py: canvas.mouse_to_canvas(false, mouse_y) as i32,
-                    vx: rand::thread_rng().gen_range(-2..3),
+                    px,
+                    py,
+                    vx: rand::thread_rng().gen_range(-1..2),
                     vy: -1,
                 });
+                occupied.insert((px, py));
+                
             }
 
             // Resize the window
