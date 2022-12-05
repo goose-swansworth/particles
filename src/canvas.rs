@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+
 
 pub struct Canvas {
     row_len: usize,
@@ -22,6 +25,35 @@ impl Canvas {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&clear_color);
         }
+    }
+    
+    pub fn fill(&self, frame: &mut [u8], sx: i32, sy: i32, occupied: &mut HashSet<(i32, i32)>, color: [u8; 4]) -> HashSet<(i32, i32)> {
+        let mut stack = Vec::new();
+        let mut set = HashSet::new();
+        stack.push((sx, sy));
+        loop {
+            let (x, y) = match stack.pop() {
+                None => break,
+                Some((x, y)) => (x, y)
+            };
+            if !occupied.contains(&(x, y)) && !set.contains(&(x, y))  {
+                self.draw_tile(frame, x as usize, y as usize, color);
+                set.insert((x, y));
+                if x > 0 {
+                    stack.push((x - 1, y));
+                }
+                if x < self.row_len as i32 / self.tile_size as i32 {
+                    stack.push((x + 1, y));
+                }
+                if y > 0 {
+                    stack.push((x, y - 1));
+                }
+                if y < self.col_len as i32 / self.tile_size as i32 {
+                    stack.push((x, y + 1));
+                }
+            }
+        }
+        set
     }
     
     pub fn mouse_to_canvas(&self, xcoord: bool, value: f32) -> usize {
@@ -50,6 +82,65 @@ impl Canvas {
             let end = start + 4 * self.tile_size;
             for pixel in frame[start..end].chunks_exact_mut(4) {
                 pixel.copy_from_slice(&color);
+            }
+        }
+    }
+    
+    //Bresenham's line algorithm
+    pub fn draw_line(&self, frame: &mut [u8], (x0, y0): (i32, i32), (x1, y1): (i32, i32), color: [u8; 4]) {
+        if (y1 - y0).abs() < (x1 - x0).abs() {
+            if x0 > x1 {
+                self.draw_line_low(frame, (x1, y1), (x0, y0), color);
+            } else {
+                self.draw_line_low(frame, (x0, y0), (x1, y1), color);
+            }
+        } else {
+            if y0 > y1 {
+                self.draw_line_high(frame, (x1, y1), (x0, y0), color);
+            } else {
+                self.draw_line_high(frame, (x0, y0), (x1, y1), color);
+            }
+        }
+    }
+    
+    fn draw_line_low(&self, frame: &mut [u8], (x0, y0): (i32, i32), (x1, y1): (i32, i32), color: [u8; 4]) {
+        let dx = x1 - x0;
+        let mut dy = y1 - y0;
+        let mut yi = 1;
+        if dy < 0 {
+            yi = -1;
+            dy = -dy;
+        }
+        let mut delta = (2 * dy) - dx;
+        let mut y = y0;
+        for x in x0..x1+1 {
+            self.draw_tile(frame, x as usize, y as usize, color);
+            if delta > 0 {
+                y += yi;
+                delta += 2 * (dy - dx);
+            } else {
+                delta += 2*dy;
+            }
+        }
+    }
+    
+    fn draw_line_high(&self, frame: &mut [u8], (x0, y0): (i32, i32), (x1, y1): (i32, i32), color: [u8; 4]) {
+        let mut dx = x1 - x0;
+        let dy = y1 - y0;
+        let mut xi = 1;
+        if dx < 0 {
+            xi = -1;
+            dx = -dx;
+        }
+        let mut delta = 2 * dx - dy;
+        let mut x = x0;
+        for y in y0..y1+1 {
+            self.draw_tile(frame, x as usize, y as usize, color);
+            if delta > 0 {
+                x += xi;
+                delta += 2 * (dx - dy);
+            } else {
+                delta += 2*dx;
             }
         }
     }
@@ -144,6 +235,67 @@ pub fn circle_coords(cx: i32, cy: i32, r: i32) -> Vec<(i32, i32)> {
             yi += 1;
         }
     
+    }
+    points
+}
+pub fn line_points((x0, y0): (i32, i32), (x1, y1): (i32, i32)) -> Vec<(i32, i32)> {
+    if (y1 - y0).abs() < (x1 - x0).abs() {
+        if x0 > x1 {
+            return points_line_low((x1, y1), (x0, y0));
+        } else {
+            return points_line_low((x0, y0), (x1, y1));
+        }
+    } else {
+        if y0 > y1 {
+            return points_line_high((x1, y1), (x0, y0));
+        } else {
+            return points_line_high((x0, y0), (x1, y1));
+        }
+    }
+}
+
+fn points_line_low((x0, y0): (i32, i32), (x1, y1): (i32, i32)) -> Vec<(i32, i32)> {
+    let mut points = Vec::new();
+    let dx = x1 - x0;
+    let mut dy = y1 - y0;
+    let mut yi = 1;
+    if dy < 0 {
+        yi = -1;
+        dy = -dy;
+    }
+    let mut delta = (2 * dy) - dx;
+    let mut y = y0;
+    for x in x0..x1+1 {
+        points.push((x, y));
+        if delta > 0 {
+            y += yi;
+            delta += 2 * (dy - dx);
+        } else {
+            delta += 2*dy;
+        }
+    }
+    points
+}
+
+fn points_line_high((x0, y0): (i32, i32), (x1, y1): (i32, i32)) -> Vec<(i32, i32)> {
+    let mut points = Vec::new();
+    let mut dx = x1 - x0;
+    let dy = y1 - y0;
+    let mut xi = 1;
+    if dx < 0 {
+        xi = -1;
+        dx = -dx;
+    }
+    let mut delta = 2 * dx - dy;
+    let mut x = x0;
+    for y in y0..y1+1 {
+        points.push((x, y));
+        if delta > 0 {
+            x += xi;
+            delta += 2 * (dx - dy);
+        } else {
+            delta += 2*dx;
+        }
     }
     points
 }

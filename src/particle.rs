@@ -31,5 +31,12 @@ impl Particle {
         }
     }
     
+    pub fn shift(&mut self, new_x: i32, new_y: i32, occupied: &mut HashSet<(i32, i32)>) {
+        occupied.remove(&(self.px, self.py));
+        self.px = new_x;
+        self.py = new_y;
+        occupied.insert((self.px, self.py));
+    }
+    
 }
 
