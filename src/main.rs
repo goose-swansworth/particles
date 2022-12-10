@@ -3,8 +3,8 @@
 
 use canvas::Canvas;
 use rand::Rng;
-use std::thread::sleep;
 use std::time;
+use std::time::Instant;
 use std::usize;
 use std::collections::HashSet;
 
@@ -15,6 +15,7 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
+use image::DynamicImage;
 
 mod particle;
 mod canvas;
@@ -28,13 +29,24 @@ const GLOBE_RAD: u32 = 40;
 const GREY: [u8; 4] = [0x3e, 0x42, 0x4b, 0xff];
 const WHITE: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 const GLASS: [u8; 4] = [0xc7, 0xe3, 0xe1, 0xff];
-const GINGERBREAD: [u8; 4] = [0x80, 0x47, 0x1c, 0xff];
 
 
 const CENTRE_X: i32 = (WIDTH as usize / TILE_SIZE / 2) as i32;
 const CENTRE_Y: i32 = (HEIGHT as usize / TILE_SIZE / 2) as i32;
 
 const BUMP_CHANCE: f64 = 0.15;
+
+fn wait_for_next_frame(last: Instant, frames: &mut u8) {
+    let mut time_to_draw = last.elapsed().as_secs_f64();
+    while time_to_draw < (1.0 / FPS)  {
+        time_to_draw = last.elapsed().as_secs_f64();
+    }
+    if *frames == FPS as u8 {
+        println!("FPS: {:.0}", 1.0 / last.elapsed().as_secs_f64());
+        *frames = 0;
+    }
+    
+}
 
 fn draw_particles(frame: &mut [u8], canvas: &Canvas, queue: &Vec<particle::Particle>) {
     for p in queue.iter() {
@@ -86,13 +98,10 @@ fn add_line_points(occupied: &mut HashSet<(i32, i32)>, (x0, y0): (i32, i32), (x1
     }
 }
 
-fn draw_house(frame: &mut [u8], canvas: &Canvas) {
-    //House lines
-    canvas.draw_line(frame, (CENTRE_X-10, CENTRE_Y-14), (CENTRE_X, CENTRE_Y-9), GINGERBREAD);
-    canvas.draw_line(frame, (CENTRE_X, CENTRE_Y-9), (CENTRE_X+11, CENTRE_Y-14), GINGERBREAD);
-    canvas.draw_line(frame, (CENTRE_X - 8, CENTRE_Y-14), (CENTRE_X - 8, CENTRE_Y-19), GINGERBREAD);
-    canvas.draw_line(frame, (CENTRE_X + 9, CENTRE_Y-14), (CENTRE_X + 9, CENTRE_Y-19), GINGERBREAD);
+fn draw_house(frame: &mut [u8], canvas: &Canvas, cabin_sprite: &DynamicImage) {
     //Ground line
+    canvas.draw_sprite(frame, cabin_sprite, CENTRE_X as usize - 10, CENTRE_Y as usize - 14);
+    //Cabin Sprite
     canvas.draw_line(frame, (56, CENTRE_Y - 20), (124, CENTRE_Y - 20), WHITE);
 }
 
@@ -126,6 +135,8 @@ fn main() -> Result<(), Error> {
     let mut mouse_x: f32 = CENTRE_X as f32;
     let mut mouse_y: f32 = CENTRE_Y as f32;
     
+    let cabin_sprite = image::open("src/resourses/cabin.png").unwrap();
+    
     let mut frames: u8 = 0;
 
     event_loop.run(move |event, _, control_flow| {
@@ -139,7 +150,7 @@ fn main() -> Result<(), Error> {
             update_particles(&mut particle_queue, &mut occupied);
             draw_particles(pixels.get_frame_mut(), &canvas, &particle_queue);
             bump_particles(&mut particle_queue, &mut occupied);
-            draw_house(pixels.get_frame_mut(), &canvas);
+            draw_house(pixels.get_frame_mut(), &canvas, &cabin_sprite);
             canvas.fill(pixels.get_frame_mut(), CENTRE_X as i32, CENTRE_Y as i32 -25, &mut occupied, WHITE);
             frames += 1;
             if pixels
@@ -181,18 +192,10 @@ fn main() -> Result<(), Error> {
             if let Some(size) = input.window_resized() {
                 pixels.resize_surface(size.width, size.height);
             }
+            wait_for_next_frame(at_last_frame, &mut frames);
 
         // Update internal state and request a redraw
-        let time_to_draw = at_last_frame.elapsed().as_secs_f64();
-        if time_to_draw < (1.0 / FPS) {
-            sleep(time::Duration::from_secs_f64((1.0 / FPS) - time_to_draw));
         }
-        if frames == FPS as u8 {
-            println!("FPS: {:.0}, Particles: {}", 1.0 / at_last_frame.elapsed().as_secs_f64(), particle_queue.len());
-            frames = 0;
-                
-        }
-        }
-        window.request_redraw()
+        window.request_redraw();
     });
 }

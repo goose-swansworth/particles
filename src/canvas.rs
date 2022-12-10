@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use image::{GenericImageView, DynamicImage};
 
 
 
@@ -24,6 +25,18 @@ impl Canvas {
     pub fn clear(&self, frame: &mut [u8], clear_color: [u8; 4]) {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&clear_color);
+        }
+    }
+    
+    pub fn draw_sprite(&self, frame: &mut [u8], sprite: &DynamicImage, x: usize, y: usize) {
+        let (n, m) = sprite.dimensions();
+        let rows = n as usize;
+        for (i, pixel) in sprite.pixels().enumerate() {
+            if pixel.2[3] != 0 {
+                let color = [pixel.2[0], pixel.2[1], pixel.2[2], pixel.2[3]];
+                self.draw_tile(frame, x + (i % rows), y + (i / rows), color);
+                
+            }
         }
     }
     
